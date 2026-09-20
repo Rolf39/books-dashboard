@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Books Dashboard</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Arial, sans-serif; background: #f4f6f8; color: #222; }
+  header { background: #1f4e79; color: #fff; padding: 16px; text-align: center; }
+  header h1 { margin: 0; font-size: 22px; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity: .85; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; }
+  .controls input, .controls select { flex: 1 1 140px; padding: 10px; font-size: 15px; border: 1px solid #ccc; border-radius: 8px; }
+  #count { padding: 0 12px 8px; font-size: 14px; color: #555; }
+  #list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; padding: 0 12px 20px; }
+  .card { background: #fff; border-radius: 10px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  .card h3 { margin: 0 0 8px; font-size: 15px; }
+  .price { font-weight: bold; color: #1f4e79; }
+  .stars { color: #f5a623; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Books Dashboard</h1>
+  <p>Data collected with my Python web scraper</p>
+</header>
+
+<div class="controls">
+  <input id="search" type="text" placeholder="Search by title...">
+  <select id="rating">
+    <option value="0">All ratings</option>
+    <option value="5">5 stars</option>
+    <option value="4">4 stars</option>
+    <option value="3">3 stars</option>
+    <option value="2">2 stars</option>
+    <option value="1">1 star</option>
+  </select>
+  <select id="sort">
+    <option value="none">Sort: default</option>
+    <option value="asc">Price: low to high</option>
+    <option value="desc">Price: high to low</option>
+  </select>
+</div>
+<div id="count"></div>
+<div id="list"></div>
+
+<script>
+const ratingMap = { One: 1, Two: 2, Three: 3, Four: 4, Five: 5 };
+let books = [];
+
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else { field += c; }
+    } else if (c === '"') { inQuotes = true; }
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+    else if (c !== "\r") { field += c; }
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function render() {
+  const q = document.getElementById("search").value.toLowerCase();
+  const minRating = parseInt(document.getElementById("rating").value);
+  const sort = document.getElementById("sort").value;
+
+  let result = books.filter(b =>
+    b.title.toLowerCase().includes(q) &&
+    (minRating === 0 || b.rating === minRating)
+  );
+  if (sort === "asc") result.sort((a, b) => a.price - b.price);
+  if (sort === "desc") result.sort((a, b) => b.price - a.price);
+
+  document.getElementById("count").textContent = result.length + " books";
+  document.getElementById("list").innerHTML = result.map(b =>
+    '<div class="card"><h3>' + b.title.replace(/</g, "&lt;") + '</h3>' +
+    '<div class="price">£' + b.price.toFixed(2) + '</div>' +
+    '<div class="stars">' + "★".repeat(b.rating) + "☆".repeat(5 - b.rating) + '</div></div>'
+  ).join("");
+}
+
+fetch("books.csv")
+  .then(r => r.text())
+  .then(text => {
+    const rows = parseCSV(text).slice(1).filter(r => r.length >= 3);
+    books = rows.map(r => ({
+      title: r[0].replace(/[^\x20-\x7E]/g, "").trim() || r[0],
+      price: parseFloat(r[1].replace(/[^0-9.]/g, "")),
+      rating: ratingMap[r[2].trim()] || 0
+    }));
+    render();
+  })
+  .catch(() => {
+    document.getElementById("count").textContent = "Could not load books.csv";
+  });
+
+["search", "rating", "sort"].forEach(id =>
+  document.getElementById(id).addEventListener("input", render)
+);
+</script>
+</body>
+</html>
